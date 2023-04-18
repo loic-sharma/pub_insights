@@ -4,6 +4,8 @@ This project is used to analyze the pub ecosystem and create reports.
 
 It is inspired by .NET's wonderful [NuGet Insights](https://github.com/NuGet/Insights) project.
 
+Consider running this in a [sandbox](https://learn.microsoft.com/windows/security/threat-protection/windows-sandbox/windows-sandbox-overview) to minimize risk of malware.
+
 ## Flutter Windows plugins containing pre-built DLLs
 
 <details>

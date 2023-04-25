@@ -141,7 +141,7 @@ znn_sdk_dart
 
 </details>
 
-## tables
+## Tables
 
 ### package_archive_entries.json
 

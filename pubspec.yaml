@@ -9,6 +9,8 @@ environment:
 # Add regular dependencies here.
 dependencies:
   archive: ^3.3.7
+  async: ^2.11.0
+  console_bars: ^1.1.0
   http: ^0.13.5
   path: ^1.8.3
   # path: ^1.8.0

@@ -1,15 +1,44 @@
 # Pub Insights
 
-This project is used to analyze the pub ecosystem and create reports.
+This project is used to analyze the pub ecosystem. This discovers all
+pub packages, downloads them all, and then generates reports on their contents.
 
-It is inspired by .NET's wonderful [NuGet Insights](https://github.com/NuGet/Insights) project.
+This project is inspired by .NET's wonderful [NuGet Insights](https://github.com/NuGet/Insights) project.
 
-Consider running this in a [sandbox](https://learn.microsoft.com/windows/security/threat-protection/windows-sandbox/windows-sandbox-overview) to minimize risk of malware.
+## Running
 
-## Flutter Windows plugins containing pre-built DLLs
+> **Note**
+> This tool downloads all pub packages. Make sure you have a decent internet
+> connection!
+
+> **Note**
+> Consider running this in a [sandbox](https://learn.microsoft.com/windows/security/threat-protection/windows-sandbox/windows-sandbox-overview) to minimize risk of malware.
+
+Run using:
+
+```
+dart run ./bin/pub_insights.dart "/my/output/path"
+```
+
+## Examples
+
+Use [DuckDB](https://duckdb.org/) to analyze the tables using SQL.
+
+### Packages that contain pre-built libraries
+
+We're adding support for Windows ARM64 to Flutter. Packages that contain
+pre-built DLLs need to be updated to also target ARM64.
+
+```SQL
+SELECT
+  DISTINCT(lower_id)
+FROM "package_archive_entries.json"
+WHERE
+  name LIKE '%.dll';
+```
 
 <details>
-<summary>Flutter Windows plugins containing pre-built DLLs...</summary>
+<summary>Results...</summary>
 
 ```
 agent_dart
@@ -111,3 +140,19 @@ znn_sdk_dart
 ```
 
 </details>
+
+## tables
+
+### package_archive_entries.json
+
+This table contains low-level information about .tar.gz file entries.
+
+Column name | Data type | Description
+-- | -- | --
+lower_id | String | Lowercase package ID. Good for joins
+identity | String | Lowercase package ID and version. Good for joins
+id | String | Original package ID
+version | String | Original package version
+sequence_number | int | The index of this entry in the .tar.gz package archive
+last_modified | int | Seconds since epoch.
+uncompressed_size | int | Size of the uncompressed file entry in bytes

@@ -154,5 +154,5 @@ identity | String | Lowercase package ID and version. Good for joins
 id | String | Original package ID
 version | String | Original package version
 sequence_number | int | The index of this entry in the .tar.gz package archive
-last_modified | int | Seconds since epoch.
+last_modified | int | Seconds since epoch
 uncompressed_size | int | Size of the uncompressed file entry in bytes

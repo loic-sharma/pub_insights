@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive_io.dart' as archive;
 import 'package:console_bars/console_bars.dart';
@@ -18,12 +19,14 @@ Future<void> main(List<String> arguments) async {
 
   final outputDir = Directory(path.canonicalize(arguments[0]));
   final metadataDir = Directory(path.join(outputDir.path, 'metadata'));
+  final versionsDir = Directory(path.join(outputDir.path, 'versions'));
   final packageDir = Directory(path.join(outputDir.path, 'packages'));
   final entriesDir = Directory(path.join(outputDir.path, 'entries'));
   final tablesDir = Directory(path.join(outputDir.path, 'tables'));
 
   await Future.wait([
     metadataDir.create(recursive: true),
+    versionsDir.create(recursive: true),
     packageDir.create(recursive: true),
     entriesDir.create(recursive: true),
     tablesDir.create(recursive: true),
@@ -40,7 +43,7 @@ Future<void> main(List<String> arguments) async {
   print('Launching metadata workers...');
   await launchWorkers(
     Queue<String>()..addAll(packages),
-    createMetadataWorker(metadataDir.path),
+    createMetadataWorker(metadataDir.path, versionsDir.path),
   );
 
   print('Package metadata workers done after ${duration(stopwatch)}');
@@ -85,31 +88,88 @@ Future<void> main(List<String> arguments) async {
   print('');
   stopwatch.reset();
 
-  // Write final reports.
-  print('Creating reports...');
-  await mergeFiles(
-    entriesDir,
-    File('${tablesDir.path}/package_archive_entries.json'),
-  );
-  print('Creating reports done after ${duration(stopwatch)}');
-  print('');
-  stopwatch.reset();
+  // Write final tables.
+  final reports = {
+    'package_versions.json': versionsDir,
+    // 'package_archive_entries.json': entriesDir,
+  };
+
+  for (final report in reports.entries) {
+    final output = report.key;
+    final inputDir = report.value;
+
+    print('Creating table $output...');
+    await mergeFiles(
+      inputDir,
+      File('${tablesDir.path}/$output'),
+    );
+    print('Creating table done after ${duration(stopwatch)}');
+    print('');
+    stopwatch.reset();
+  }
 }
 
 Future<void> Function(String) createMetadataWorker(
   String metadataPath,
+  String versionsPath,
 ) {
   return (String package) async {
     try {
-      final file = File('$metadataPath/$package.json');
+      Uint8List? metadata;
 
-      if (await file.exists() && await file.length() > 0) {
-        return;
+      // Cache the package's metadata to disk.
+      final metadataFile = File('$metadataPath/$package.json');
+      if (!await metadataFile.exists() || await metadataFile.length() == 0) {
+        metadata = await client.packageMetadata(package);
+
+        await metadataFile.writeAsBytes(metadata, flush: true);
       }
 
-      final data = await client.packageMetadata(package);
+      // Create the package versions report.
+      final versionsFile = File('$versionsPath/$package.json');
+      if (!await versionsFile.exists() || await versionsFile.length() == 0) {
+        // Read the metadata from disk if it was previously cached.
+        metadata ??= await metadataFile.readAsBytes();
 
-      await file.writeAsBytes(data, flush: true);
+        final metadataJson = json.decode(utf8.decode(metadata)) as Map<String, dynamic>;
+
+        final name = metadataJson['name'] as String;
+        final latest = metadataJson['latest']['version'];
+        final versions = metadataJson['versions'] as List<dynamic>;
+
+        final lowerId = name.toLowerCase();
+
+        final versionsWriter = versionsFile.openWrite();
+        for (Map<String, dynamic> versionJson in versions) {
+          final version = versionJson['version'] as String;
+          final archiveUrl = versionJson['archive_url'] as String;
+          final archiveSha256 = versionJson['archive_sha256'] as String;
+          final published = versionJson['published'] as String;
+          final pubspecJson = versionJson['pubspec'] as Map<String, dynamic>;
+
+          final lowerVersion = version.toLowerCase();
+          final outputJson = json.encode({
+            'lower_id': lowerId,
+            'identity': '$lowerId/$lowerVersion',
+            'id': name,
+            'version': version,
+            'archive_url': archiveUrl,
+            'archive_sha256': archiveSha256,
+            'published': published,
+            'is_latest': version == latest,
+            'pubspec': json.encode(pubspecJson),
+          });
+
+          versionsWriter.writeln(outputJson);
+
+          // final outputBytes = utf8.encode('$outputJson\n');
+          // final outputGzipped = gzip.encode(outputBytes);
+          // versionsWriter.add(outputGzipped);
+        }
+
+        await versionsWriter.flush();
+        await versionsWriter.close();
+      }
     } catch (e) {
       print('Failed to process $package: $e');
     }
@@ -176,7 +236,8 @@ Future<void> Function(List<String>) createPackageArchiveEntriesWorker(
       final entriesWriter = entriesFile.openWrite();
       for (var i = 0; i < packageArchive.files.length; i++) {
         final file = packageArchive.files[i];
-        entriesWriter.writeln(json.encode({
+
+        final outputJson = json.encode({
           'lower_id': packageIdLower,
           'identity': identity,
           'id': package,
@@ -185,7 +246,13 @@ Future<void> Function(List<String>) createPackageArchiveEntriesWorker(
           'name': file.name,
           'last_modified': file.lastModTime,
           'uncompressed_size': file.size,
-        }));
+        });
+
+        entriesWriter.writeln(outputJson);
+
+        // final outputBytes = utf8.encode('$outputJson\n');
+        // final outputGzipped = gzip.encode(outputBytes);
+        // entriesWriter.add(outputGzipped);
       }
 
       await entriesWriter.flush();

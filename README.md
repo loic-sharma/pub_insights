@@ -30,7 +30,9 @@ Use [DuckDB](https://duckdb.org/) to analyze the tables using SQL.
 WITH
   -- Find all packages that are plugins or implement a plugin.
   -- Packages point to which plugin they implement using 'flutter.plugin.implements'.
-  plugins_including_defaults AS (
+  -- This contains duplicate rows if a plugin points to an implementation package
+  -- in its pubspec using 'default_package'.
+  plugins_ AS (
     SELECT
       json_type(pubspec, '$.flutter.plugin') IS NOT NULL AS is_plugin,
       COALESCE(
@@ -44,18 +46,16 @@ WITH
       is_plugin = true AND
       is_latest = true
   ),
-  -- Plugins can contain an implementation for a platform, or they can point
-  -- to another package that contains the implementation using
-  -- 'flutter.plugin.[platform].default_package'.
-  -- This causes two rows per platform: one for the plugin, one for the implementation.
-  -- The implementation package is all care about, filter out plugins that
-  -- point to a default implementation.
+  -- Plugins can point to the package that contains the implementation using
+  -- 'flutter.plugin.[platform].default_package'. This causes two rows per
+  -- platform: one for the plugin, one for the implementation. Remove this
+  -- duplication by filtering out the row that points to the default implementation.
   plugins AS (
     SELECT
-      p.plugin,
-      p.id,
-      p.platform
-    FROM plugins p
+      p.id,       -- The package ID that contains a plugin implementation.
+      p.plugin,   -- The flutter plugin the package implements.
+      p.platform  -- The platform supported by this package ID.
+    FROM plugins_ p
     WHERE NOT EXISTS (
       SELECT 1
       FROM "package_versions.json"
@@ -72,19 +72,25 @@ WITH
         ) IS NOT NULL
     )
   ),
-  plugin_by_platforms AS (
+  plugin_by_platforms_ AS (
     SELECT
       plugin,
       platform,
       list(id) AS ids
     FROM plugins
     GROUP BY plugin, platform
+  ),
+  plugin_by_platforms AS (
+    SELECT
+      -- A flutter plugin.
+      plugin,
+      -- A map of supported platforms to a list of packages that implement the
+      -- plugin for that platform.
+      map(list(platform), list(ids)) AS platform_to_packages
+    FROM plugin_by_platforms_
+    GROUP BY plugin
   )
-SELECT
-  plugin,
-  map(list(platform), list(ids)) AS platform_to_packages
-FROM plugin_by_platforms
-GROUP BY plugin;
+SELECT * FROM plugin_by_platforms;
 ```
 
 <details>

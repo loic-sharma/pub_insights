@@ -24,3 +24,13 @@ Future<Uint8List> packageMetadata(String package) async {
 
   return response.bodyBytes;
 }
+
+Future<Uint8List> packageScore(String package) async {
+  final url = Uri.parse('https://pub.dartlang.org/api/packages/$package/score');
+  final response = await http.get(url);
+  if (response.statusCode != 200) {
+    throw '${response.statusCode} ${response.reasonPhrase}';
+  }
+
+  return response.bodyBytes;
+}

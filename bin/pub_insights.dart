@@ -22,6 +22,7 @@ Future<void> main(List<String> arguments) async {
   final versionsDir = Directory(path.join(outputDir.path, 'versions'));
   final packageDir = Directory(path.join(outputDir.path, 'packages'));
   final entriesDir = Directory(path.join(outputDir.path, 'entries'));
+  final scoresDir = Directory(path.join(outputDir.path, 'scores'));
   final tablesDir = Directory(path.join(outputDir.path, 'tables'));
 
   await Future.wait([
@@ -29,6 +30,7 @@ Future<void> main(List<String> arguments) async {
     versionsDir.create(recursive: true),
     packageDir.create(recursive: true),
     entriesDir.create(recursive: true),
+    scoresDir.create(recursive: true),
     tablesDir.create(recursive: true),
   ]);
 
@@ -47,6 +49,17 @@ Future<void> main(List<String> arguments) async {
   );
 
   print('Package metadata workers done after ${duration(stopwatch)}');
+  print('');
+  stopwatch.reset();
+
+  // Download all packages' scores to disk.
+  print('Launching scores workers...');
+  await launchWorkers(
+    Queue<String>()..addAll(packages),
+    createScoresWorker(scoresDir.path),
+  );
+
+  print('Package scores workers done after ${duration(stopwatch)}');
   print('');
   stopwatch.reset();
 
@@ -91,6 +104,7 @@ Future<void> main(List<String> arguments) async {
   // Write final tables.
   final reports = {
     'package_versions.json': versionsDir,
+    'package_scores.json': scoresDir,
     // 'package_archive_entries.json': entriesDir,
   };
 
@@ -169,6 +183,43 @@ Future<void> Function(String) createMetadataWorker(
 
         await versionsWriter.flush();
         await versionsWriter.close();
+      }
+    } catch (e) {
+      print('Failed to process $package: $e');
+    }
+  };
+}
+
+Future<void> Function(String) createScoresWorker(
+  String scoresPath,
+) {
+  return (String package) async {
+    try {
+      Uint8List? score;
+
+      // Cache the package's metadata to disk.
+      final scoreFile = File('$scoresPath/$package.json');
+      if (!await scoreFile.exists() || await scoreFile.length() == 0) {
+        score = await client.packageScore(package);
+
+        final scoreJson = json.decode(utf8.decode(score)) as Map<String, dynamic>;
+
+        final outputJson = json.encode({
+          'lower_id': package.toLowerCase(),
+          'granted_points': scoreJson['grantedPoints'] as int,
+          'max_points': scoreJson['maxPoints'] as int,
+          'like_count': scoreJson['likeCount'] as int,
+          'popularity_score': scoreJson['popularityScore'] as double,
+          'tags': scoreJson['tags'] as List<dynamic>,
+          'last_updated': scoreJson['lastUpdated'] as String,
+        });
+
+        final scoreWriter = scoreFile.openWrite();
+
+        scoreWriter.writeln(outputJson);
+
+        await scoreWriter.flush();
+        await scoreWriter.close();
       }
     } catch (e) {
       print('Failed to process $package: $e');

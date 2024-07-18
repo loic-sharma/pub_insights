@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as path;
 import 'dart:convert';
 
 Future<List<String>> listPackages() async {
@@ -11,6 +13,21 @@ Future<List<String>> listPackages() async {
   }
 
   final data = json.decode(response.body) as Map<String, dynamic>;
+  final packages = data['packages'] as List<dynamic>;
+  return packages.map((id) => id as String).toList();
+}
+
+/// Subset of packages to play with on a smaller harddrive.
+Future<List<String>> listPopularPackages() async {
+  return listPackagesFromFile('./sources/popular-package-names.json');
+}
+
+/// Take a json file in a format identical to the return from https://pub.dev/api/package-names.
+/// returns a list of packages. 
+Future<List<String>> listPackagesFromFile(String filepath) async {
+  final response = await File(path.absolute(filepath)).readAsString();
+
+  final data = json.decode(response) as Map<String, dynamic>;
   final packages = data['packages'] as List<dynamic>;
   return packages.map((id) => id as String).toList();
 }

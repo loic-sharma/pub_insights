@@ -5,19 +5,64 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:archive/archive_io.dart' as archive;
+import 'package:args/args.dart';
 import 'package:console_bars/console_bars.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import 'package:pub_insights/isolate_worker.dart';
 import 'package:pub_insights/pub_client.dart' as client;
 
+const String _directoryFlag = 'directory';
+const String _helpFlag = 'help';
+const String _fetchModeFlag = 'fetch-mode';
+const String _fetchModeAll = 'all';
+const String _fetchModePopular = 'popular';
+const String _fetchModeFile = 'file';
+const String _fetchModeNone = 'none';
+const String _fetchFileFlag = 'fetch-file';
+const String _optimizeTablesFlag = 'optimize-tables';
+
 Future<void> main(List<String> arguments) async {
-  if (arguments.length != 1) {
-    print('Usage: pub_insights <output path>');
-    return;
+  final ArgParser parser = ArgParser()
+    ..addOption(_directoryFlag,
+        defaultsTo: 'data', abbr: 'd', help: 'Directory to download data into')
+    ..addOption(_fetchModeFlag,
+        allowed: ['all', 'popular', 'file', 'none'],
+        abbr: 'm',
+        help: 'What set of packages to download.',
+        defaultsTo: _fetchModePopular)
+    ..addOption(_fetchFileFlag,
+        abbr: 'f',
+        help:
+            'File to use as package input. Must be set if $_fetchModeFlag is file.')
+    ..addFlag(_optimizeTablesFlag,
+        abbr: 'o',
+        help: 'Collapse versions and stores into respective jsonl files',
+        defaultsTo: false)
+    ..addFlag(_helpFlag,
+        negatable: false, abbr: 'h', help: 'Print this reference.');
+  final ArgResults argResults = parser.parse(arguments);
+
+  if (argResults.flag(_helpFlag) || arguments.isEmpty) {
+    print('''usage: dart run bin/pub_insights.dart [options]
+
+    ${parser.usage}''');
+    exit(0);
   }
 
-  final outputDir = Directory(path.canonicalize(arguments[0]));
+  final String baseDir =
+      path.dirname(path.dirname(Platform.script.toFilePath()));
+  // Default output dir is data/
+  Directory outputDir = Directory(path.canonicalize('$baseDir/data/'));
+  if (argResults.option(_directoryFlag) != null) {
+    outputDir = Directory(path.canonicalize(argResults.option(_directoryFlag)!));
+  }
+
+  if (!outputDir.existsSync()) {
+    print('Can find directory $outputDir');
+    exit(1);
+  }
+
   final metadataDir = Directory(path.join(outputDir.path, 'metadata'));
   final versionsDir = Directory(path.join(outputDir.path, 'versions'));
   final packageDir = Directory(path.join(outputDir.path, 'packages'));
@@ -36,8 +81,89 @@ Future<void> main(List<String> arguments) async {
 
   final Stopwatch stopwatch = Stopwatch()..start();
 
-  print('Discovering packages...');
-  final packages = await client.listPackages();
+  final mode = argResults.option(_fetchModeFlag) ?? '';
+  print('fetch mode "$mode"...');
+  switch (mode) {
+    case _fetchModeAll:
+      print('Discovering all packages...');
+      final packages = await client.listPackages();
+      await downloadPackages(packages, stopwatch,
+          metadataDir: metadataDir,
+          versionsDir: versionsDir,
+          packageDir: packageDir,
+          entriesDir: entriesDir,
+          scoresDir: scoresDir,
+          tablesDir: tablesDir);
+      break;
+    case _fetchModePopular:
+      print('Discovering popular packages...');
+      final packages = await client.listPopularPackages();
+      await downloadPackages(packages, stopwatch,
+          metadataDir: metadataDir,
+          versionsDir: versionsDir,
+          packageDir: packageDir,
+          entriesDir: entriesDir,
+          scoresDir: scoresDir,
+          tablesDir: tablesDir);
+      break;
+    case _fetchModeFile:
+      if (!argResults.wasParsed(_fetchFileFlag)) {
+        print('File flag must be set when using $_fetchModeFile');
+        exit(1);
+      }
+      final fetchFile = argResults.option(_fetchFileFlag) as String;
+      print('Discovering packages from $fetchFile...');
+      final packages = await client.listPackagesFromFile(path.relative(fetchFile));
+      await downloadPackages(packages, stopwatch,
+          metadataDir: metadataDir,
+          versionsDir: versionsDir,
+          packageDir: packageDir,
+          entriesDir: entriesDir,
+          scoresDir: scoresDir,
+          tablesDir: tablesDir);
+      break;
+    case _fetchModeNone:
+      print('Skipping downloading...');
+      break;
+    default:
+      print('Unknown fetch mode $mode');
+      break;
+  }
+  stopwatch.reset();
+
+  if (argResults.flag(_optimizeTablesFlag)) {
+    print('Optimizing tables ...');
+    final reports = {
+      'package_versions.json': versionsDir,
+      'package_scores.json': scoresDir,
+    };
+
+    for (final report in reports.entries) {
+      final output = report.key;
+      final inputDir = report.value;
+
+      print('Creating table $output...');
+      await mergeFiles(
+        inputDir,
+        File('${tablesDir.path}/$output'),
+      );
+      print('Creating table done after ${duration(stopwatch)}');
+      print('');
+      stopwatch.reset();
+    }
+  }
+}
+
+Future<void> downloadPackages(
+  List<String> packages,
+  Stopwatch stopwatch, {
+  required Directory metadataDir,
+  required Directory versionsDir,
+  required Directory packageDir,
+  required Directory entriesDir,
+  required Directory scoresDir,
+  required Directory tablesDir,
+}) async {
   print('Discovered ${packages.length} packages');
   print('');
 
@@ -50,8 +176,6 @@ Future<void> main(List<String> arguments) async {
 
   print('Package metadata workers done after ${duration(stopwatch)}');
   print('');
-  stopwatch.reset();
-
   // Download all packages' scores to disk.
   print('Launching scores workers...');
   await launchWorkers(
@@ -100,27 +224,6 @@ Future<void> main(List<String> arguments) async {
   print('Package archive entries workers done after ${duration(stopwatch)}');
   print('');
   stopwatch.reset();
-
-  // Write final tables.
-  final reports = {
-    'package_versions.json': versionsDir,
-    'package_scores.json': scoresDir,
-    // 'package_archive_entries.json': entriesDir,
-  };
-
-  for (final report in reports.entries) {
-    final output = report.key;
-    final inputDir = report.value;
-
-    print('Creating table $output...');
-    await mergeFiles(
-      inputDir,
-      File('${tablesDir.path}/$output'),
-    );
-    print('Creating table done after ${duration(stopwatch)}');
-    print('');
-    stopwatch.reset();
-  }
 }
 
 Future<void> Function(String) createMetadataWorker(
@@ -145,7 +248,8 @@ Future<void> Function(String) createMetadataWorker(
         // Read the metadata from disk if it was previously cached.
         metadata ??= await metadataFile.readAsBytes();
 
-        final metadataJson = json.decode(utf8.decode(metadata)) as Map<String, dynamic>;
+        final metadataJson =
+            json.decode(utf8.decode(metadata)) as Map<String, dynamic>;
 
         final name = metadataJson['name'] as String;
         final latest = metadataJson['latest']['version'];
@@ -202,7 +306,8 @@ Future<void> Function(String) createScoresWorker(
       if (!await scoreFile.exists() || await scoreFile.length() == 0) {
         score = await client.packageScore(package);
 
-        final scoreJson = json.decode(utf8.decode(score)) as Map<String, dynamic>;
+        final scoreJson =
+            json.decode(utf8.decode(score)) as Map<String, dynamic>;
 
         final outputJson = json.encode({
           'lower_id': package.toLowerCase(),
@@ -227,7 +332,8 @@ Future<void> Function(String) createScoresWorker(
   };
 }
 
-Future<void> Function(List<String>) createDownloadWorker(String metadataPath, String packagePath) {
+Future<void> Function(List<String>) createDownloadWorker(
+    String metadataPath, String packagePath) {
   return (List<String> packageVersion) async {
     final package = packageVersion[0];
     final version = packageVersion[1];
@@ -248,8 +354,7 @@ Future<void> Function(List<String>) createDownloadWorker(String metadataPath, St
       final response = await http.get(Uri.parse(archiveUrl));
 
       await archiveFile.writeAsBytes(response.bodyBytes, flush: true);
-    }
-    catch (e, s) {
+    } catch (e, s) {
       print('Failed to download $package $version: $e');
       print(s);
     }
@@ -279,9 +384,8 @@ Future<void> Function(List<String>) createPackageArchiveEntriesWorker(
 
       // print('Processing package archive entries for $package $version...');
       final packageStream = archive.InputFileStream(archiveFile.path);
-      final packageArchive = archive.TarDecoder().decodeBytes(
-        archive.GZipDecoder().decodeBuffer(packageStream)
-      );
+      final packageArchive = archive.TarDecoder()
+          .decodeBytes(archive.GZipDecoder().decodeBuffer(packageStream));
       await packageStream.close();
 
       final entriesWriter = entriesFile.openWrite();
@@ -309,7 +413,8 @@ Future<void> Function(List<String>) createPackageArchiveEntriesWorker(
       await entriesWriter.flush();
       await entriesWriter.close();
     } catch (e, s) {
-      print('Failed to process package archive entries for $package $version: $e');
+      print(
+          'Failed to process package archive entries for $package $version: $e');
       print(s);
     }
   };
@@ -328,7 +433,8 @@ Future<List<List<String>>> listPackageAndVersions(
         final metadataFile = File('$metadataPath/$packageIdLower.json');
 
         final metadataString = await metadataFile.readAsString();
-        final metadataJson = json.decode(metadataString) as Map<String, dynamic>;
+        final metadataJson =
+            json.decode(metadataString) as Map<String, dynamic>;
         final versionsJson = metadataJson['versions'] as List<dynamic>;
 
         for (final versionJson in versionsJson) {

@@ -42,7 +42,7 @@ Future<void> main(List<String> arguments) async {
     ..addFlag(_optimizeTablesFlag,
         abbr: 'o',
         help: 'Collapse versions and stores into respective jsonl files',
-        defaultsTo: false)
+        defaultsTo: true)
     ..addFlag(_helpFlag,
         negatable: false, abbr: 'h', help: 'Print this reference.');
   final ArgResults argResults = parser.parse(arguments);
@@ -59,7 +59,8 @@ Future<void> main(List<String> arguments) async {
   // Default output dir is data/
   Directory outputDir = Directory(path.canonicalize('$baseDir/data/'));
   if (argResults.option(_directoryFlag) != null) {
-    outputDir = Directory(path.canonicalize(argResults.option(_directoryFlag)!));
+    outputDir =
+        Directory(path.canonicalize(argResults.option(_directoryFlag)!));
   }
 
   if (!outputDir.existsSync()) {
@@ -117,7 +118,8 @@ Future<void> main(List<String> arguments) async {
       }
       final fetchFile = argResults.option(_fetchFileFlag) as String;
       print('Discovering packages from $fetchFile...');
-      final packages = await client.listPackagesFromFile(path.relative(fetchFile));
+      final packages =
+          await client.listPackagesFromFile(path.relative(fetchFile));
       await downloadPackages(packages, stopwatch,
           metadataDir: metadataDir,
           versionsDir: versionsDir,
@@ -147,12 +149,17 @@ Future<void> main(List<String> arguments) async {
       final inputDir = report.value;
 
       print('Creating table $output...');
-      await mergeFiles(
+      final mergedCount = await mergeFiles(
         inputDir,
         File('${tablesDir.path}/$output'),
       );
-      print('Creating table done after ${duration(stopwatch)}');
-      print('');
+      if (mergedCount == 0) {
+        print('No files to merge.');
+        exit(1);
+      } else {
+        print('Creating table with done after ${duration(stopwatch)}');
+        print('');
+      }
       stopwatch.reset();
     }
   }
@@ -461,8 +468,11 @@ Future<List<List<String>>> listPackageAndVersions(
   return result;
 }
 
-Future<void> mergeFiles(Directory inputDir, File output) async {
+Future<int> mergeFiles(Directory inputDir, File output) async {
   final entities = inputDir.listSync(recursive: true);
+  if (entities.isEmpty) {
+    return 0;
+  }
   final statusBar = FillingBar(
     desc: 'Working',
     total: entities.length,
@@ -479,6 +489,7 @@ Future<void> mergeFiles(Directory inputDir, File output) async {
   print('');
   await writer.flush();
   await writer.close();
+  return entities.length;
 }
 
 String duration(Stopwatch stopwatch) {

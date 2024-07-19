@@ -24,8 +24,12 @@ const String _optimizeTablesFlag = 'optimize-tables';
 
 Future<void> main(List<String> arguments) async {
   final ArgParser parser = ArgParser()
-    ..addOption(_directoryFlag,
-        defaultsTo: 'data', abbr: 'd', help: 'Directory to download data into')
+    ..addOption(
+      _directoryFlag,
+      defaultsTo: 'data',
+      abbr: 'd',
+      help: 'Directory to download data into',
+    )
     ..addOption(_fetchModeFlag,
         allowed: ['all', 'popular', 'file', 'none'],
         abbr: 'm',

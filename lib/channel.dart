@@ -34,7 +34,8 @@ abstract class ChannelReader<T> {
 class UnboundedChannel<T> implements ChannelWriter<T>, ChannelReader<T> {
   bool _completed = false;
   final ListQueue<T> _items = ListQueue<T>();
-  final ListQueue<Completer<bool>> _waitingConsumers = ListQueue<Completer<bool>>();
+  final ListQueue<Completer<bool>> _waitingConsumers =
+      ListQueue<Completer<bool>>();
 
   @override
   T? tryRead() {
@@ -79,20 +80,21 @@ class UnboundedChannel<T> implements ChannelWriter<T>, ChannelReader<T> {
 }
 
 class BoundedChannel<T> implements ChannelWriter<T>, ChannelReader<T> {
-  BoundedChannel(this._capacity)
-      : _items = ListQueue<T>(_capacity);
+  BoundedChannel(this._capacity) : _items = ListQueue<T>(_capacity);
 
   final int _capacity;
   final ListQueue<T> _items;
   bool _completed = false;
 
-  final ListQueue<Completer<void>> _waitingProducers = ListQueue<Completer<void>>();
-  final ListQueue<Completer<bool>> _waitingConsumers = ListQueue<Completer<bool>>();
+  final ListQueue<Completer<void>> _waitingProducers =
+      ListQueue<Completer<void>>();
+  final ListQueue<Completer<bool>> _waitingConsumers =
+      ListQueue<Completer<bool>>();
 
   @override
   T? tryRead() {
     if (_items.isEmpty) return null;
-    
+
     final item = _items.removeFirst();
 
     if (_waitingProducers.isNotEmpty) {
@@ -122,7 +124,7 @@ class BoundedChannel<T> implements ChannelWriter<T>, ChannelReader<T> {
     _waitingConsumers.add(completer);
     return await completer.future;
   }
-  
+
   @override
   Future<void> write(T item) async {
     assert(_completed == false);
@@ -142,7 +144,7 @@ class BoundedChannel<T> implements ChannelWriter<T>, ChannelReader<T> {
       _waitingConsumers.removeFirst().complete(true);
     }
   }
-  
+
   @override
   void complete() {
     assert(_waitingProducers.isEmpty);

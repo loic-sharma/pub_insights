@@ -157,7 +157,7 @@ Future<void> main(List<String> arguments) async {
         print('No files to merge.');
         exit(1);
       } else {
-        print('Creating table with done after ${duration(stopwatch)}');
+        print('Creating table $output done after ${duration(stopwatch)}');
         print('');
       }
       stopwatch.reset();

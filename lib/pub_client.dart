@@ -23,7 +23,7 @@ Future<List<String>> listPopularPackages() async {
 }
 
 /// Take a json file in a format identical to the return from https://pub.dev/api/package-names.
-/// returns a list of packages. 
+/// returns a list of packages.
 Future<List<String>> listPackagesFromFile(String filepath) async {
   final response = await File(path.absolute(filepath)).readAsString();
 

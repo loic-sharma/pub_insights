@@ -17,7 +17,7 @@ This project is inspired by .NET's wonderful [NuGet Insights](https://github.com
 Run using:
 
 ```
-dart run ./bin/pub_insights.dart "/my/output/path"
+dart run ./bin/pub_insights.dart --fetch-mode popular
 ```
 
 ## Examples

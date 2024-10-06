@@ -17,6 +17,7 @@ class PackageDownloader {
     required this.entriesDir,
     required this.scoresDir,
     required this.tablesDir,
+    this.latestOnly = false,
   });
 
   final Directory metadataDir;
@@ -25,6 +26,9 @@ class PackageDownloader {
   final Directory entriesDir;
   final Directory scoresDir;
   final Directory tablesDir;
+
+  /// If true, only download the highest stable version of each package.
+  final bool latestOnly;
 
   Future<void> download(List<String> packages) async {
     final Stopwatch stopwatch = Stopwatch()..start();
@@ -57,6 +61,7 @@ class PackageDownloader {
     final packageVersions = await _listPackageAndVersions(
       metadataDir.path,
       Queue<String>()..addAll(packages),
+      latestOnly,
     );
     print('Found package version after ${duration(stopwatch)}');
     print('');
@@ -66,7 +71,7 @@ class PackageDownloader {
     print('Launching package download workers...');
 
     await launchWorkers(
-      Queue<List<String>>()..addAll(packageVersions),
+      Queue<_PackageVersion>()..addAll(packageVersions),
       _createDownloadWorker(metadataDir.path, packageDir.path),
     );
 
@@ -78,7 +83,7 @@ class PackageDownloader {
     print('Launching package archive entries workers...');
 
     await launchWorkers(
-      Queue<List<String>>()..addAll(packageVersions),
+      Queue<_PackageVersion>()..addAll(packageVersions),
       _createPackageArchiveEntriesWorker(
         metadataDir.path,
         packageDir.path,
@@ -211,14 +216,14 @@ Future<void> Function(String) _createScoresWorker(
   };
 }
 
-Future<void> Function(List<String>) _createDownloadWorker(
+Future<void> Function(_PackageVersion) _createDownloadWorker(
   String metadataPath,
   String packagePath,
 ) {
-  return (List<String> packageVersion) async {
-    final package = packageVersion[0];
-    final version = packageVersion[1];
-    final archiveUrl = packageVersion[2];
+  return (_PackageVersion packageVersion) async {
+    final package = packageVersion.id;
+    final version = packageVersion.version;
+    final archiveUrl = packageVersion.archiveUrl;
 
     final packageIdLower = package.toLowerCase();
     final identity = '$packageIdLower/${version.toLowerCase()}';
@@ -242,14 +247,14 @@ Future<void> Function(List<String>) _createDownloadWorker(
   };
 }
 
-Future<void> Function(List<String>) _createPackageArchiveEntriesWorker(
+Future<void> Function(_PackageVersion) _createPackageArchiveEntriesWorker(
   String metadataPath,
   String packagePath,
   String entriesPath,
 ) {
-  return (List<String> packageVersion) async {
-    final package = packageVersion[0];
-    final version = packageVersion[1];
+  return (_PackageVersion packageVersion) async {
+    final package = packageVersion.id;
+    final version = packageVersion.version;
 
     final packageIdLower = package.toLowerCase();
     final identity = '$packageIdLower/${version.toLowerCase()}';
@@ -301,11 +306,13 @@ Future<void> Function(List<String>) _createPackageArchiveEntriesWorker(
   };
 }
 
-Future<List<List<String>>> _listPackageAndVersions(
+
+Future<List<_PackageVersion>> _listPackageAndVersions(
   String metadataPath,
   Queue<String> packages,
+  bool latestOnly,
 ) async {
-  final result = <List<String>>[];
+  final result = <_PackageVersion>[];
   Future listPackageAndVersionsWorker(int _) async {
     while (packages.isNotEmpty) {
       final package = packages.removeFirst();
@@ -316,13 +323,20 @@ Future<List<List<String>>> _listPackageAndVersions(
         final metadataString = await metadataFile.readAsString();
         final metadataJson =
             json.decode(metadataString) as Map<String, dynamic>;
-        final versionsJson = metadataJson['versions'] as List<dynamic>;
 
-        for (final versionJson in versionsJson) {
-          final version = versionJson['version'] as String;
-          final archiveUrl = versionJson['archive_url'] as String;
-
-          result.add([package, version, archiveUrl]);
+        if (latestOnly) {
+          result.add(_createPackageVersion(
+            package,
+            metadataJson['latest'] as Map<String, dynamic>,
+          ));
+        } else {
+          final versionsJson = metadataJson['versions'] as List<dynamic>;
+          for (final versionJson in versionsJson) {
+            result.add(_createPackageVersion(
+              package,
+              versionJson as Map<String, dynamic>,
+            ));
+          }
         }
       } catch (e, s) {
         print('Failed to process package $package: $e');
@@ -337,3 +351,14 @@ Future<List<List<String>>> _listPackageAndVersions(
 
   return result;
 }
+
+typedef _PackageVersion = ({String id, String version, String archiveUrl});
+
+_PackageVersion _createPackageVersion(
+  String package,
+  Map<String, dynamic> json,
+) => (
+  id: package,
+  version: json['version'] as String,
+  archiveUrl: json['archive_url'] as String,
+);

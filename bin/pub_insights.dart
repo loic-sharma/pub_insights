@@ -16,6 +16,7 @@ const String _fetchModePopular = 'popular';
 const String _fetchModeFile = 'file';
 const String _fetchModeNone = 'none';
 const String _fetchFileFlag = 'fetch-file';
+const String _latestOnlyFlag = 'latest-only';
 const String _optimizeTablesFlag = 'optimize-tables';
 
 Future<void> main(List<String> arguments) async {
@@ -32,6 +33,11 @@ Future<void> main(List<String> arguments) async {
       abbr: 'm',
       help: 'What set of packages to download.',
       defaultsTo: _fetchModePopular,
+    )
+    ..addFlag(
+      _latestOnlyFlag,
+      help: 'If true, downloads only the highest stable version of each package.',
+      defaultsTo: false,
     )
     ..addOption(
       _fetchFileFlag,
@@ -89,6 +95,7 @@ Future<void> main(List<String> arguments) async {
     tablesDir.create(recursive: true),
   ]);
 
+  final latestOnly = argResults.flag(_latestOnlyFlag);
   final packageDownloader = PackageDownloader(
     metadataDir: metadataDir,
     versionsDir: versionsDir,
@@ -96,6 +103,7 @@ Future<void> main(List<String> arguments) async {
     entriesDir: entriesDir,
     scoresDir: scoresDir,
     tablesDir: tablesDir,
+    latestOnly: latestOnly,
   );
 
   final mode = argResults.option(_fetchModeFlag) ?? '';

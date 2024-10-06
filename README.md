@@ -234,7 +234,6 @@ znn_sdk_dart
 
 This table contains the information for each package version.
 
-
 Column name | Data type | Description
 -- | -- | --
 lower_id | String | Lowercase package ID. Good for joins
@@ -246,6 +245,20 @@ archive_sha256 | String | SHA-256 hash of the package archive
 published | String | Timestamp package was published
 is_latest | Bool | Whether this package version is the latest
 pubspec | String | The package's pubspec JSON
+
+### package_scores.json
+
+This table contains the information for each package's score.
+
+Column name | Data type | Description
+-- | -- | --
+lower_id | String | Lowercase package ID. Good for joins
+granted_points | int | Package pana score
+max_points | int | Max potential pana score at time of package analysis
+like_count | int | Pub users that liked this package
+popularity_score | double | Pub popularity score from 0 to 1.0
+tags | Array of strings | Package analysis
+last_updated | UTC timestamp of package analysis
 
 ### package_archive_entries.json
 

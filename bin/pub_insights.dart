@@ -30,21 +30,30 @@ Future<void> main(List<String> arguments) async {
       abbr: 'd',
       help: 'Directory to download data into',
     )
-    ..addOption(_fetchModeFlag,
-        allowed: ['all', 'popular', 'file', 'none'],
-        abbr: 'm',
-        help: 'What set of packages to download.',
-        defaultsTo: _fetchModePopular)
-    ..addOption(_fetchFileFlag,
-        abbr: 'f',
-        help:
-            'File to use as package input. Must be set if $_fetchModeFlag is file.')
-    ..addFlag(_optimizeTablesFlag,
-        abbr: 'o',
-        help: 'Collapse versions and stores into respective jsonl files',
-        defaultsTo: true)
-    ..addFlag(_helpFlag,
-        negatable: false, abbr: 'h', help: 'Print this reference.');
+    ..addOption(
+      _fetchModeFlag,
+      allowed: ['all', 'popular', 'file', 'none'],
+      abbr: 'm',
+      help: 'What set of packages to download.',
+      defaultsTo: _fetchModePopular,
+    )
+    ..addOption(
+      _fetchFileFlag,
+      abbr: 'f',
+      help: 'File to use as package input. Must be set if $_fetchModeFlag is file.',
+    )
+    ..addFlag(
+      _optimizeTablesFlag,
+      abbr: 'o',
+      help: 'Collapse versions and stores into respective jsonl files',
+      defaultsTo: true,
+    )
+    ..addFlag(
+      _helpFlag,
+      negatable: false,
+      abbr: 'h',
+      help: 'Print this reference.',
+    );
   final ArgResults argResults = parser.parse(arguments);
 
   if (argResults.flag(_helpFlag) || arguments.isEmpty) {
@@ -92,24 +101,30 @@ Future<void> main(List<String> arguments) async {
     case _fetchModeAll:
       print('Discovering all packages...');
       final packages = await client.listPackages();
-      await downloadPackages(packages, stopwatch,
-          metadataDir: metadataDir,
-          versionsDir: versionsDir,
-          packageDir: packageDir,
-          entriesDir: entriesDir,
-          scoresDir: scoresDir,
-          tablesDir: tablesDir);
+      await downloadPackages(
+        packages,
+        stopwatch,
+        metadataDir: metadataDir,
+        versionsDir: versionsDir,
+        packageDir: packageDir,
+        entriesDir: entriesDir,
+        scoresDir: scoresDir,
+        tablesDir: tablesDir,
+      );
       break;
     case _fetchModePopular:
       print('Discovering popular packages...');
       final packages = await client.listPopularPackages();
-      await downloadPackages(packages, stopwatch,
-          metadataDir: metadataDir,
-          versionsDir: versionsDir,
-          packageDir: packageDir,
-          entriesDir: entriesDir,
-          scoresDir: scoresDir,
-          tablesDir: tablesDir);
+      await downloadPackages(
+        packages,
+        stopwatch,
+        metadataDir: metadataDir,
+        versionsDir: versionsDir,
+        packageDir: packageDir,
+        entriesDir: entriesDir,
+        scoresDir: scoresDir,
+        tablesDir: tablesDir,
+      );
       break;
     case _fetchModeFile:
       if (!argResults.wasParsed(_fetchFileFlag)) {
@@ -120,13 +135,16 @@ Future<void> main(List<String> arguments) async {
       print('Discovering packages from $fetchFile...');
       final packages =
           await client.listPackagesFromFile(path.relative(fetchFile));
-      await downloadPackages(packages, stopwatch,
-          metadataDir: metadataDir,
-          versionsDir: versionsDir,
-          packageDir: packageDir,
-          entriesDir: entriesDir,
-          scoresDir: scoresDir,
-          tablesDir: tablesDir);
+      await downloadPackages(
+        packages,
+        stopwatch,
+        metadataDir: metadataDir,
+        versionsDir: versionsDir,
+        packageDir: packageDir,
+        entriesDir: entriesDir,
+        scoresDir: scoresDir,
+        tablesDir: tablesDir,
+      );
       break;
     case _fetchModeNone:
       print('Skipping downloading...');
@@ -344,7 +362,9 @@ Future<void> Function(String) createScoresWorker(
 }
 
 Future<void> Function(List<String>) createDownloadWorker(
-    String metadataPath, String packagePath) {
+  String metadataPath,
+  String packagePath,
+) {
   return (List<String> packageVersion) async {
     final package = packageVersion[0];
     final version = packageVersion[1];

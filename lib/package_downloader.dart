@@ -63,7 +63,7 @@ class PackageDownloader {
       Queue<String>()..addAll(packages),
       latestOnly,
     );
-    print('Found package version after ${duration(stopwatch)}');
+    print('Found package versions after ${duration(stopwatch)}');
     print('');
     stopwatch.reset();
 

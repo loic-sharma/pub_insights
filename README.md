@@ -256,7 +256,7 @@ lower_id | String | Lowercase package ID. Good for joins
 granted_points | int | Package pana score
 max_points | int | Max potential pana score at time of package analysis
 like_count | int | Pub users that liked this package
-popularity_score | double | Pub popularity score from 0 to 1.0
+download_count_30_days | int | Number of downloads in the previous 30 days from last_updated
 tags | Array of strings | Package analysis
 last_updated | UTC timestamp of package analysis
 

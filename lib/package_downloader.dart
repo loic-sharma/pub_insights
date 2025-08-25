@@ -198,7 +198,7 @@ Future<void> Function(String) _createScoresWorker(
           'granted_points': scoreJson['grantedPoints'] as int,
           'max_points': scoreJson['maxPoints'] as int,
           'like_count': scoreJson['likeCount'] as int,
-          'popularity_score': scoreJson['popularityScore'] as double,
+          'download_count_30_days': scoreJson['downloadCount30Days'] as int,
           'tags': scoreJson['tags'] as List<dynamic>,
           'last_updated': scoreJson['lastUpdated'] as String,
         });
